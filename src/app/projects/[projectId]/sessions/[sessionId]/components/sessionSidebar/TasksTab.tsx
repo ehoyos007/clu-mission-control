@@ -26,6 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { useActivities } from "@/hooks/useActivities";
 import { createTask, listTasks, updateTask } from "@/lib/api/tasks";
 import { cn } from "@/lib/utils";
 import type { Task, TaskStatus, TaskUpdate } from "@/server/core/tasks/schema";
@@ -207,6 +208,7 @@ export const TasksTab: FC<TasksTabProps> = ({ projectId, sessionId }) => {
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
   const [showCluOnly, setShowCluOnly] = useState(false);
+  const { logActivity } = useActivities();
 
   const queryClient = useQueryClient();
 
@@ -267,9 +269,23 @@ export const TasksTab: FC<TasksTabProps> = ({ projectId, sessionId }) => {
       turnId: task.id,
       update: { owner: newOwner },
     });
-    toast.success(
-      newOwner === "clu" ? "Assigned to Clu" : "Unassigned from Clu",
-    );
+    if (newOwner === "clu") {
+      toast.success("Assigned to Clu");
+      void logActivity(
+        "task_assigned_clu",
+        `Task assigned to Clu: ${task.subject}`,
+        `Task #${task.id} assigned to Clu`,
+        { taskId: task.id, subject: task.subject },
+      );
+    } else {
+      toast.success("Unassigned from Clu");
+      void logActivity(
+        "task_unassigned_clu",
+        `Task unassigned from Clu: ${task.subject}`,
+        `Task #${task.id} unassigned from Clu`,
+        { taskId: task.id, subject: task.subject },
+      );
+    }
   };
 
   const handleCreate = (e: React.FormEvent) => {

@@ -164,3 +164,88 @@ export function subscribeToCluSessions(
     )
     .subscribe();
 }
+
+// ============================================================================
+// ACTIVITIES
+// ============================================================================
+
+export type ActivityType =
+  | "session_marked_clu"
+  | "session_unmarked_clu"
+  | "task_assigned_clu"
+  | "task_unassigned_clu"
+  | "session_started"
+  | "session_completed"
+  | "system";
+
+export interface Activity {
+  id: string;
+  type: string;
+  title: string;
+  description: string | null;
+  metadata: Record<string, unknown> | null;
+  created_at: string;
+}
+
+// Get recent activities
+export async function getActivities(limit = 50): Promise<Activity[]> {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from("activities")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("Failed to fetch activities:", error);
+    return [];
+  }
+  return (data || []) as Activity[];
+}
+
+// Create an activity
+export async function createActivity(
+  type: ActivityType,
+  title: string,
+  description?: string,
+  metadata?: Record<string, unknown>,
+): Promise<Activity | null> {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from("activities")
+    .insert({
+      type,
+      title,
+      description,
+      metadata: metadata || {},
+    })
+    .select()
+    .single();
+
+  if (error) {
+    console.error("Failed to create activity:", error);
+    return null;
+  }
+  return data as Activity;
+}
+
+// Subscribe to activity changes
+export function subscribeToActivities(
+  callback: (activities: Activity[]) => void,
+) {
+  if (!supabase) return null;
+
+  return supabase
+    .channel("activities-changes")
+    .on(
+      "postgres_changes",
+      { event: "INSERT", schema: "public", table: "activities" },
+      async () => {
+        const activities = await getActivities();
+        callback(activities);
+      },
+    )
+    .subscribe();
+}

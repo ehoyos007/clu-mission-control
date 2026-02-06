@@ -424,7 +424,7 @@
       ],
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionsTab.tsx",
-        201
+        203
       ]
     ],
     "translation": "Start New Chat"
@@ -750,7 +750,7 @@
       ],
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionsTab.tsx",
-        330
+        339
       ]
     ],
     "translation": "Loading..."
@@ -2361,7 +2361,7 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionsTab.tsx",
-        288
+        297
       ]
     ],
     "translation": "Paused"
@@ -2372,7 +2372,7 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionsTab.tsx",
-        286
+        295
       ]
     ],
     "translation": "Running"
@@ -2383,7 +2383,7 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionsTab.tsx",
-        332
+        341
       ]
     ],
     "translation": "Load More"
@@ -2394,7 +2394,7 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionsTab.tsx",
-        151
+        153
       ]
     ],
     "translation": "Sessions"
@@ -2405,7 +2405,7 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionsTab.tsx",
-        180
+        182
       ]
     ],
     "translation": "Total"
@@ -3095,7 +3095,7 @@
       ],
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionSidebar.tsx",
-        104
+        112
       ]
     ],
     "translation": "Back to Projects"
@@ -3110,7 +3110,7 @@
       ],
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionSidebar.tsx",
-        62
+        70
       ]
     ],
     "translation": "Show MCP Server Settings"
@@ -3121,7 +3121,7 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionSidebar.tsx",
-        74
+        82
       ]
     ],
     "translation": "Show Scheduler Jobs"
@@ -3136,7 +3136,7 @@
       ],
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionSidebar.tsx",
-        49
+        51
       ]
     ],
     "translation": "Show Session List"

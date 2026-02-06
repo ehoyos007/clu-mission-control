@@ -2,6 +2,7 @@ import { z } from "zod";
 
 export const tabSchema = z.enum([
   "sessions",
+  "activity",
   "mcp",
   "scheduler",
   "tasks",

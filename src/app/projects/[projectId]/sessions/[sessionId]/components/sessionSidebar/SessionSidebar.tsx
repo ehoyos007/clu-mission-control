@@ -1,6 +1,7 @@
 import { Trans } from "@lingui/react";
 import { Link } from "@tanstack/react-router";
 import {
+  ActivityIcon,
   ArrowLeftIcon,
   CalendarClockIcon,
   ListTodoIcon,
@@ -18,6 +19,7 @@ import {
 } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { Loading } from "../../../../../../../components/Loading";
+import { ActivityTab } from "./ActivityTab";
 import { McpTab } from "./McpTab";
 import { MobileSidebar } from "./MobileSidebar";
 import { SchedulerTab } from "./SchedulerTab";
@@ -55,6 +57,12 @@ export const SessionSidebar: FC<{
             />
           </Suspense>
         ),
+      },
+      {
+        id: "activity",
+        icon: ActivityIcon,
+        title: "Clu Activity",
+        content: <ActivityTab />,
       },
       {
         id: "mcp",

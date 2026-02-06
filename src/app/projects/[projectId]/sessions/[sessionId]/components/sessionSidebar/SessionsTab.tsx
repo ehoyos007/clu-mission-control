@@ -19,6 +19,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { useActivities } from "@/hooks/useActivities";
 import { cn } from "@/lib/utils";
 import { formatLocaleDate } from "../../../../../../../lib/date/formatLocaleDate";
 import { useConfig } from "../../../../../../hooks/useConfig";
@@ -61,6 +62,7 @@ export const SessionsTab: FC<{
     markAsClu,
     isConfigured: isCluConfigured,
   } = useCluSessionsContext();
+  const { logActivity } = useActivities();
 
   // Preserve current tab state or default to "sessions"
   const currentTab = search.tab ?? "sessions";
@@ -247,7 +249,14 @@ export const SessionsTab: FC<{
                               session.id,
                               projectData.pages[0]?.project.meta.projectPath ??
                                 "",
-                            );
+                            ).then(() => {
+                              void logActivity(
+                                "session_marked_clu",
+                                `Session marked as Clu-owned`,
+                                `Session ${title} assigned to Clu`,
+                                { sessionId: session.id },
+                              );
+                            });
                           }}
                         >
                           <BotIcon className="w-3 h-3" />

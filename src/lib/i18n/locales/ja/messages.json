@@ -38,7 +38,7 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/MobileSidebar.tsx",
-        153
+        159
       ]
     ],
     "translation": "サイドバーを閉じる"
@@ -2583,7 +2583,7 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/MobileSidebar.tsx",
-        102
+        108
       ],
       [
         "src/components/GlobalSidebar.tsx",
@@ -2700,7 +2700,7 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/MobileSidebar.tsx",
-        117
+        123
       ]
     ],
     "translation": "通知"
@@ -2915,7 +2915,7 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/MobileSidebar.tsx",
-        110
+        116
       ]
     ],
     "translation": "セッション表示"
@@ -3005,7 +3005,7 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/MobileSidebar.tsx",
-        249
+        277
       ],
       [
         "src/components/GlobalSidebar.tsx",
@@ -3091,11 +3091,11 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/MobileSidebar.tsx",
-        177
+        183
       ],
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionSidebar.tsx",
-        112
+        122
       ]
     ],
     "translation": "プロジェクト一覧に戻る"
@@ -3106,11 +3106,11 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/MobileSidebar.tsx",
-        226
+        254
       ],
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionSidebar.tsx",
-        70
+        72
       ]
     ],
     "translation": "MCPサーバー設定を表示"
@@ -3121,7 +3121,7 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionSidebar.tsx",
-        82
+        92
       ]
     ],
     "translation": "スケジューラジョブを表示"
@@ -3132,11 +3132,11 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/MobileSidebar.tsx",
-        202
+        208
       ],
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionSidebar.tsx",
-        51
+        53
       ]
     ],
     "translation": "セッション一覧を表示"
@@ -3147,7 +3147,7 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/MobileSidebar.tsx",
-        271
+        299
       ]
     ],
     "translation": "システム情報を表示"

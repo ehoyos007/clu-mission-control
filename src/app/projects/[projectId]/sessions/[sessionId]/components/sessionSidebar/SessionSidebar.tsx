@@ -4,6 +4,7 @@ import {
   ActivityIcon,
   ArrowLeftIcon,
   CalendarClockIcon,
+  KanbanIcon,
   ListTodoIcon,
   MessageSquareIcon,
   PlugIcon,
@@ -11,6 +12,7 @@ import {
 import { type FC, Suspense, useMemo } from "react";
 import type { SidebarTab } from "@/components/GlobalSidebar";
 import { GlobalSidebar } from "@/components/GlobalSidebar";
+import { KanbanBoard } from "@/components/KanbanBoard";
 import {
   Tooltip,
   TooltipContent,
@@ -73,8 +75,16 @@ export const SessionSidebar: FC<{
       {
         id: "tasks",
         icon: ListTodoIcon,
-        title: "Tasks",
+        title: "Tasks (List)",
         content: <TasksTab projectId={projectId} sessionId={activeSessionId} />,
+      },
+      {
+        id: "kanban",
+        icon: KanbanIcon,
+        title: "Kanban Board",
+        content: (
+          <KanbanBoard projectId={projectId} sessionId={activeSessionId} />
+        ),
       },
       {
         id: "scheduler",

@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import {
   ArrowLeftIcon,
   InfoIcon,
+  KanbanIcon,
   MessageSquareIcon,
   PlugIcon,
   SettingsIcon,
@@ -10,6 +11,7 @@ import {
 } from "lucide-react";
 import { type FC, Suspense, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { KanbanBoard } from "@/components/KanbanBoard";
 import { NotificationSettings } from "@/components/NotificationSettings";
 import { SettingsControls } from "@/components/SettingsControls";
 import { SystemInfoCard } from "@/components/SystemInfoCard";
@@ -39,7 +41,7 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
 }) => {
   const { i18n } = useLingui();
   const [activeTab, setActiveTab] = useState<
-    "sessions" | "mcp" | "settings" | "system-info"
+    "sessions" | "kanban" | "mcp" | "settings" | "system-info"
   >("sessions");
   const [mounted, setMounted] = useState(false);
 
@@ -69,7 +71,7 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
   }, [isOpen, onClose]);
 
   const handleTabClick = (
-    tab: "sessions" | "mcp" | "settings" | "system-info",
+    tab: "sessions" | "kanban" | "mcp" | "settings" | "system-info",
   ) => {
     setActiveTab(tab);
   };
@@ -89,6 +91,10 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
             projectId={projectId}
             isMobile={true}
           />
+        );
+      case "kanban":
+        return (
+          <KanbanBoard projectId={projectId} sessionId={currentSessionId} />
         );
       case "mcp":
         return <McpTab projectId={projectId} />;
@@ -201,6 +207,28 @@ export const MobileSidebar: FC<MobileSidebarProps> = ({
                   <p>
                     <Trans id="sidebar.show.session.list" />
                   </p>
+                </TooltipContent>
+              </Tooltip>
+
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() => handleTabClick("kanban")}
+                    className={cn(
+                      "w-8 h-8 flex items-center justify-center rounded-md transition-colors",
+                      "hover:bg-sidebar-accent hover:text-sidebar-accent-foreground",
+                      activeTab === "kanban"
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
+                        : "text-sidebar-foreground/70",
+                    )}
+                    data-testid="kanban-tab-button-mobile"
+                  >
+                    <KanbanIcon className="w-4 h-4" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">
+                  <p>Kanban Board</p>
                 </TooltipContent>
               </Tooltip>
 

@@ -4,6 +4,7 @@ import { NodeContext } from "@effect/platform-node";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
 import { Effect, Layer } from "effect";
+import { cors } from "hono/cors";
 import { AgentSessionLayer } from "./core/agent-session";
 import { AgentSessionController } from "./core/agent-session/presentation/AgentSessionController";
 import { ClaudeCodeController } from "./core/claude-code/presentation/ClaudeCodeController";
@@ -44,6 +45,17 @@ import { platformLayer } from "./lib/effect/layers";
 export const startServer = async (options: CliOptions) => {
   // biome-ignore lint/style/noProcessEnv: allow only here
   const isDevelopment = process.env.NODE_ENV === "development";
+
+  // Enable CORS for Tailscale/remote access
+  honoApp.use(
+    "*",
+    cors({
+      origin: "*",
+      allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+      allowHeaders: ["Content-Type", "Authorization"],
+      credentials: true,
+    }),
+  );
 
   if (!isDevelopment) {
     const staticPath = resolve(import.meta.dirname, "static");

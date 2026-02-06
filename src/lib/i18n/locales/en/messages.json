@@ -424,7 +424,7 @@
       ],
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionsTab.tsx",
-        141
+        201
       ]
     ],
     "translation": "Start New Chat"
@@ -750,7 +750,7 @@
       ],
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionsTab.tsx",
-        238
+        330
       ]
     ],
     "translation": "Loading..."
@@ -2361,7 +2361,7 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionsTab.tsx",
-        197
+        288
       ]
     ],
     "translation": "Paused"
@@ -2372,7 +2372,7 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionsTab.tsx",
-        195
+        286
       ]
     ],
     "translation": "Running"
@@ -2383,7 +2383,7 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionsTab.tsx",
-        240
+        332
       ]
     ],
     "translation": "Load More"
@@ -2394,7 +2394,7 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionsTab.tsx",
-        116
+        151
       ]
     ],
     "translation": "Sessions"
@@ -2405,7 +2405,7 @@
     "origin": [
       [
         "src/app/projects/[projectId]/sessions/[sessionId]/components/sessionSidebar/SessionsTab.tsx",
-        120
+        180
       ]
     ],
     "translation": "Total"

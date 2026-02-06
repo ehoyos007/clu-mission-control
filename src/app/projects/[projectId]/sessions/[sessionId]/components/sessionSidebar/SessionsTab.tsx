@@ -2,14 +2,23 @@ import { Trans } from "@lingui/react";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
 import { useAtomValue } from "jotai";
 import {
+  BotIcon,
   CoinsIcon,
   MessageSquareIcon,
   PlusIcon,
   TrashIcon,
 } from "lucide-react";
-import { type FC, useState } from "react";
+import { type FC, useMemo, useState } from "react";
+import { CluBadge } from "@/components/CluBadge";
+import { useCluSessionsContext } from "@/components/CluSessionsProvider";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import { formatLocaleDate } from "../../../../../../../lib/date/formatLocaleDate";
 import { useConfig } from "../../../../../../hooks/useConfig";
@@ -45,43 +54,69 @@ export const SessionsTab: FC<{
     title: string;
   } | null>(null);
 
+  // Clu sessions filter
+  const [showCluOnly, setShowCluOnly] = useState(false);
+  const {
+    getSessionOwner,
+    markAsClu,
+    isConfigured: isCluConfigured,
+  } = useCluSessionsContext();
+
   // Preserve current tab state or default to "sessions"
   const currentTab = search.tab ?? "sessions";
 
   const isNewChatActive = currentSessionId === "";
 
   // Sort sessions: Running > Paused > Others, then by lastModifiedAt (newest first)
-  const sortedSessions = [...sessions].sort((a, b) => {
-    const aProcess = sessionProcesses.find(
-      (process) => process.sessionId === a.id,
-    );
-    const bProcess = sessionProcesses.find(
-      (process) => process.sessionId === b.id,
-    );
+  const sortedSessions = useMemo(() => {
+    let filtered = [...sessions];
 
-    const aStatus = aProcess?.status;
-    const bStatus = bProcess?.status;
-
-    // Define priority: running = 0, paused = 1, others = 2
-    const getPriority = (status: "paused" | "running" | undefined) => {
-      if (status === "running") return 0;
-      if (status === "paused") return 1;
-      return 2;
-    };
-
-    const aPriority = getPriority(aStatus);
-    const bPriority = getPriority(bStatus);
-
-    // First sort by priority
-    if (aPriority !== bPriority) {
-      return aPriority - bPriority;
+    // Filter by Clu ownership if enabled
+    if (showCluOnly && isCluConfigured) {
+      filtered = filtered.filter((s) => {
+        const owner = getSessionOwner(s.id);
+        return owner?.owner_type === "clu";
+      });
     }
 
-    // Then sort by lastModifiedAt (newest first)
-    const aTime = a.lastModifiedAt ? new Date(a.lastModifiedAt).getTime() : 0;
-    const bTime = b.lastModifiedAt ? new Date(b.lastModifiedAt).getTime() : 0;
-    return bTime - aTime;
-  });
+    return filtered.sort((a, b) => {
+      const aProcess = sessionProcesses.find(
+        (process) => process.sessionId === a.id,
+      );
+      const bProcess = sessionProcesses.find(
+        (process) => process.sessionId === b.id,
+      );
+
+      const aStatus = aProcess?.status;
+      const bStatus = bProcess?.status;
+
+      // Define priority: running = 0, paused = 1, others = 2
+      const getPriority = (status: "paused" | "running" | undefined) => {
+        if (status === "running") return 0;
+        if (status === "paused") return 1;
+        return 2;
+      };
+
+      const aPriority = getPriority(aStatus);
+      const bPriority = getPriority(bStatus);
+
+      // First sort by priority
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority;
+      }
+
+      // Then sort by lastModifiedAt (newest first)
+      const aTime = a.lastModifiedAt ? new Date(a.lastModifiedAt).getTime() : 0;
+      const bTime = b.lastModifiedAt ? new Date(b.lastModifiedAt).getTime() : 0;
+      return bTime - aTime;
+    });
+  }, [
+    sessions,
+    sessionProcesses,
+    showCluOnly,
+    isCluConfigured,
+    getSessionOwner,
+  ]);
 
   const handleDeleteClick = (
     e: React.MouseEvent,
@@ -115,9 +150,34 @@ export const SessionsTab: FC<{
           <h2 className="font-semibold text-lg">
             <Trans id="sessions.title" />
           </h2>
+          {isCluConfigured && (
+            <TooltipProvider>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={showCluOnly ? "default" : "ghost"}
+                    size="sm"
+                    className={cn(
+                      "h-7 px-2 gap-1",
+                      showCluOnly && "bg-primary text-primary-foreground",
+                    )}
+                    onClick={() => setShowCluOnly(!showCluOnly)}
+                  >
+                    <BotIcon className="w-3.5 h-3.5" />
+                    <span className="text-xs">Clu</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {showCluOnly ? "Show all sessions" : "Show Clu sessions only"}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          )}
         </div>
         <p className="text-xs text-sidebar-foreground/70">
-          {sessions.length} <Trans id="sessions.total" />
+          {sortedSessions.length}
+          {showCluOnly ? " Clu" : ""} / {sessions.length}{" "}
+          <Trans id="sessions.total" />
         </p>
       </div>
 
@@ -155,6 +215,8 @@ export const SessionsTab: FC<{
           );
           const isRunning = sessionProcess?.status === "running";
           const isPaused = sessionProcess?.status === "paused";
+          const cluSession = getSessionOwner(session.id);
+          const isCluOwned = cluSession?.owner_type === "clu";
 
           return (
             <Link
@@ -168,36 +230,66 @@ export const SessionsTab: FC<{
                   "bg-blue-100 dark:bg-blue-900/50 border-blue-400 dark:border-blue-600 shadow-md ring-1 ring-blue-200/50 dark:ring-blue-700/50 hover:bg-blue-100 dark:hover:bg-blue-900/50 hover:border-blue-400 dark:hover:border-blue-600",
               )}
             >
-              {/* Delete button - shown on hover */}
-              <Button
-                variant="ghost"
-                size="sm"
-                className="absolute right-1 top-1 h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity text-destructive hover:text-destructive hover:bg-destructive/10"
-                onClick={(e) => handleDeleteClick(e, session.id, title)}
-              >
-                <TrashIcon className="w-3 h-3" />
-              </Button>
+              {/* Action buttons - shown on hover */}
+              <div className="absolute right-1 top-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                {isCluConfigured && !isCluOwned && (
+                  <TooltipProvider>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0 text-primary hover:text-primary hover:bg-primary/10"
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            void markAsClu(
+                              session.id,
+                              projectData.pages[0]?.project.meta.projectPath ??
+                                "",
+                            );
+                          }}
+                        >
+                          <BotIcon className="w-3 h-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Mark as Clu session</TooltipContent>
+                    </Tooltip>
+                  </TooltipProvider>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 text-destructive hover:text-destructive hover:bg-destructive/10"
+                  onClick={(e) => handleDeleteClick(e, session.id, title)}
+                >
+                  <TrashIcon className="w-3 h-3" />
+                </Button>
+              </div>
               <div className="space-y-1.5">
                 <div className="flex items-start justify-between gap-2 pr-6">
                   <h3 className="text-sm font-medium line-clamp-2 leading-tight text-sidebar-foreground flex-1">
                     {title}
                   </h3>
-                  {(isRunning || isPaused) && (
-                    <Badge
-                      variant={isRunning ? "default" : "secondary"}
-                      className={cn(
-                        "text-xs shrink-0",
-                        isRunning && "bg-green-500 text-white",
-                        isPaused && "bg-yellow-500 text-white",
-                      )}
-                    >
-                      {isRunning ? (
-                        <Trans id="session.status.running" />
-                      ) : (
-                        <Trans id="session.status.paused" />
-                      )}
-                    </Badge>
-                  )}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {isCluOwned && <CluBadge size="sm" />}
+                    {(isRunning || isPaused) && (
+                      <Badge
+                        variant={isRunning ? "default" : "secondary"}
+                        className={cn(
+                          "text-xs",
+                          isRunning && "bg-green-500 text-white",
+                          isPaused && "bg-yellow-500 text-white",
+                        )}
+                      >
+                        {isRunning ? (
+                          <Trans id="session.status.running" />
+                        ) : (
+                          <Trans id="session.status.paused" />
+                        )}
+                      </Badge>
+                    )}
+                  </div>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3 text-xs text-sidebar-foreground/70">

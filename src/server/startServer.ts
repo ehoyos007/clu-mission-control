@@ -57,6 +57,12 @@ export const startServer = async (options: CliOptions) => {
     }),
   );
 
+  // Request logging
+  honoApp.use("*", async (c, next) => {
+    console.log(`[${new Date().toISOString()}] ${c.req.method} ${c.req.url}`);
+    await next();
+  });
+
   if (!isDevelopment) {
     const staticPath = resolve(import.meta.dirname, "static");
     console.log("Serving static files from ", staticPath);

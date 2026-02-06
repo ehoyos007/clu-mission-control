@@ -3,6 +3,7 @@ import { BrowserPreviewProvider } from "../app/components/BrowserPreviewProvider
 import { RootErrorBoundary } from "../app/components/RootErrorBoundary";
 import { AuthenticatedProviders } from "../components/AuthenticatedProviders";
 import { AuthProvider } from "../components/AuthProvider";
+import { CluSessionsProvider } from "../components/CluSessionsProvider";
 import { ThemeProvider } from "../components/ThemeProvider";
 import { Toaster } from "../components/ui/sonner";
 import { LinguiClientProvider } from "../lib/i18n/LinguiProvider";
@@ -14,9 +15,11 @@ export const Route = createRootRoute({
         <AuthProvider>
           <LinguiClientProvider>
             <AuthenticatedProviders>
-              <BrowserPreviewProvider>
-                <Outlet />
-              </BrowserPreviewProvider>
+              <CluSessionsProvider>
+                <BrowserPreviewProvider>
+                  <Outlet />
+                </BrowserPreviewProvider>
+              </CluSessionsProvider>
             </AuthenticatedProviders>
           </LinguiClientProvider>
         </AuthProvider>

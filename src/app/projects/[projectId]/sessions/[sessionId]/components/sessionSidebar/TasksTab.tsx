@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertCircle,
   AlertTriangle,
+  BotIcon,
   CheckCircle2,
   Circle,
   Clock,
@@ -9,8 +10,9 @@ import {
   Loader2,
   PlusIcon,
 } from "lucide-react";
-import { type FC, useState } from "react";
+import { type FC, useMemo, useState } from "react";
 import { toast } from "sonner";
+import { CluBadge } from "@/components/CluBadge";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -65,10 +67,12 @@ const StatusIndicator: FC<{
 const TaskItem: FC<{
   task: Task;
   onToggleStatus: (task: Task) => void;
-}> = ({ task, onToggleStatus }) => {
+  onToggleOwner: (task: Task) => void;
+}> = ({ task, onToggleStatus, onToggleOwner }) => {
   const isCompleted = task.status === "completed";
   const isInProgress = task.status === "in_progress";
   const isFailed = task.status === "failed";
+  const isCluOwned = task.owner === "clu";
 
   return (
     <div
@@ -83,8 +87,27 @@ const TaskItem: FC<{
         isCompleted && "opacity-60 bg-sidebar/20",
         isFailed &&
           "border-red-400/60 bg-red-50/30 dark:bg-red-950/30 dark:border-red-700/60",
+        isCluOwned &&
+          !isCompleted &&
+          "border-primary/40 bg-primary/5 dark:bg-primary/10",
       )}
     >
+      {/* Assign to Clu button - shown on hover */}
+      <button
+        type="button"
+        onClick={() => onToggleOwner(task)}
+        className={cn(
+          "absolute right-2 top-2 p-1 rounded transition-all",
+          "opacity-0 group-hover:opacity-100",
+          isCluOwned
+            ? "text-primary bg-primary/10 hover:bg-primary/20"
+            : "text-sidebar-foreground/40 hover:text-primary hover:bg-primary/10",
+        )}
+        title={isCluOwned ? "Unassign from Clu" : "Assign to Clu"}
+      >
+        <BotIcon className="w-3.5 h-3.5" />
+      </button>
+
       <div className="flex items-start gap-3">
         <StatusIndicator
           status={task.status}
@@ -92,8 +115,8 @@ const TaskItem: FC<{
         />
 
         <div className="flex-1 min-w-0 space-y-1">
-          {/* Title row with ID badge */}
-          <div className="flex items-center gap-2">
+          {/* Title row with ID badge and Clu badge */}
+          <div className="flex items-center gap-2 flex-wrap">
             <span
               className={cn(
                 "text-sm font-medium leading-tight line-clamp-1",
@@ -102,6 +125,7 @@ const TaskItem: FC<{
             >
               {task.subject}
             </span>
+            {isCluOwned && <CluBadge size="sm" />}
             <span className="text-[10px] font-mono text-sidebar-foreground/50 shrink-0">
               #{task.id}
             </span>
@@ -182,6 +206,7 @@ export const TasksTab: FC<TasksTabProps> = ({ projectId, sessionId }) => {
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [subject, setSubject] = useState("");
   const [description, setDescription] = useState("");
+  const [showCluOnly, setShowCluOnly] = useState(false);
 
   const queryClient = useQueryClient();
 
@@ -236,13 +261,33 @@ export const TasksTab: FC<TasksTabProps> = ({ projectId, sessionId }) => {
     });
   };
 
+  const handleToggleOwner = (task: Task) => {
+    const newOwner = task.owner === "clu" ? undefined : "clu";
+    updateMutation.mutate({
+      turnId: task.id,
+      update: { owner: newOwner },
+    });
+    toast.success(
+      newOwner === "clu" ? "Assigned to Clu" : "Unassigned from Clu",
+    );
+  };
+
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault();
     if (!subject.trim()) return;
     createMutation.mutate({ subject, description });
   };
 
+  const filteredTasks = useMemo(() => {
+    if (!tasks) return [];
+    if (showCluOnly) {
+      return tasks.filter((t) => t.owner === "clu");
+    }
+    return tasks;
+  }, [tasks, showCluOnly]);
+
   const taskCount = tasks?.length ?? 0;
+  const cluTaskCount = tasks?.filter((t) => t.owner === "clu").length ?? 0;
 
   return (
     <div className="h-full flex flex-col">
@@ -250,65 +295,82 @@ export const TasksTab: FC<TasksTabProps> = ({ projectId, sessionId }) => {
       <div className="border-b border-sidebar-border p-4">
         <div className="flex items-center justify-between mb-2">
           <h2 className="font-semibold text-lg">Tasks</h2>
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
+          <div className="flex items-center gap-1">
+            {cluTaskCount > 0 && (
               <Button
                 size="sm"
-                variant="ghost"
-                className="h-8 w-8 p-0 rounded-full hover:bg-primary/10 hover:text-primary transition-colors"
+                variant={showCluOnly ? "default" : "ghost"}
+                className={cn(
+                  "h-7 px-2 gap-1",
+                  showCluOnly && "bg-primary text-primary-foreground",
+                )}
+                onClick={() => setShowCluOnly(!showCluOnly)}
               >
-                <PlusIcon className="w-4 h-4" />
+                <BotIcon className="w-3.5 h-3.5" />
+                <span className="text-xs">{cluTaskCount}</span>
               </Button>
-            </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
-              <DialogHeader>
-                <DialogTitle>Create New Task</DialogTitle>
-                <DialogDescription>
-                  Add a new task to track your progress.
-                </DialogDescription>
-              </DialogHeader>
-              <form onSubmit={handleCreate} className="space-y-4 mt-2">
-                <div className="space-y-2">
-                  <Label htmlFor="subject">Title</Label>
-                  <Input
-                    id="subject"
-                    value={subject}
-                    onChange={(e) => setSubject(e.target.value)}
-                    placeholder="e.g. Implement login flow"
-                    className="focus-visible:ring-primary/30"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    placeholder="Optional details about the task..."
-                    className="focus-visible:ring-primary/30 min-h-[80px]"
-                  />
-                </div>
-                <DialogFooter>
-                  <Button
-                    type="submit"
-                    disabled={createMutation.isPending || !subject.trim()}
-                    className="w-full sm:w-auto"
-                  >
-                    {createMutation.isPending ? (
-                      <>
-                        <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                        Creating...
-                      </>
-                    ) : (
-                      "Create Task"
-                    )}
-                  </Button>
-                </DialogFooter>
-              </form>
-            </DialogContent>
-          </Dialog>
+            )}
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <DialogTrigger asChild>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-8 w-8 p-0 rounded-full hover:bg-primary/10 hover:text-primary transition-colors"
+                >
+                  <PlusIcon className="w-4 h-4" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-md">
+                <DialogHeader>
+                  <DialogTitle>Create New Task</DialogTitle>
+                  <DialogDescription>
+                    Add a new task to track your progress.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleCreate} className="space-y-4 mt-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="subject">Title</Label>
+                    <Input
+                      id="subject"
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                      placeholder="e.g. Implement login flow"
+                      className="focus-visible:ring-primary/30"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Description</Label>
+                    <Textarea
+                      id="description"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      placeholder="Optional details about the task..."
+                      className="focus-visible:ring-primary/30 min-h-[80px]"
+                    />
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      type="submit"
+                      disabled={createMutation.isPending || !subject.trim()}
+                      className="w-full sm:w-auto"
+                    >
+                      {createMutation.isPending ? (
+                        <>
+                          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        "Create Task"
+                      )}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
         <p className="text-xs text-sidebar-foreground/70">
+          {showCluOnly ? `${filteredTasks.length} Clu / ` : ""}
           {taskCount} {taskCount === 1 ? "task" : "tasks"}
         </p>
       </div>
@@ -320,11 +382,22 @@ export const TasksTab: FC<TasksTabProps> = ({ projectId, sessionId }) => {
         {!isLoading && !error && taskCount === 0 && <EmptyState />}
         {!isLoading &&
           !error &&
-          tasks?.map((task) => (
+          taskCount > 0 &&
+          filteredTasks.length === 0 &&
+          showCluOnly && (
+            <div className="text-center py-8 text-sidebar-foreground/50 text-sm">
+              No Clu tasks. Assign tasks using the{" "}
+              <BotIcon className="w-3.5 h-3.5 inline" /> button.
+            </div>
+          )}
+        {!isLoading &&
+          !error &&
+          filteredTasks.map((task) => (
             <TaskItem
               key={task.id}
               task={task}
               onToggleStatus={handleToggleStatus}
+              onToggleOwner={handleToggleOwner}
             />
           ))}
       </div>

@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { NodeContext } from "@effect/platform-node";
 import { serve } from "@hono/node-server";
 import { serveStatic } from "@hono/node-server/serve-static";
+import { createNodeWebSocket } from "@hono/node-ws";
 import { Effect, Layer } from "effect";
 import { cors } from "hono/cors";
 import { AgentSessionLayer } from "./core/agent-session";
@@ -41,6 +42,7 @@ import { InitializeService } from "./hono/initialize";
 import { AuthMiddleware } from "./hono/middleware/auth.middleware";
 import { routes } from "./hono/route";
 import { platformLayer } from "./lib/effect/layers";
+import { voiceRoutes, voiceWebSocketHandlers } from "./voice";
 
 export const startServer = async (options: CliOptions) => {
   // biome-ignore lint/style/noProcessEnv: allow only here
@@ -62,6 +64,39 @@ export const startServer = async (options: CliOptions) => {
     console.log(`[${new Date().toISOString()}] ${c.req.method} ${c.req.url}`);
     await next();
   });
+
+  // Voice REST routes
+  honoApp.route("/api/voice", voiceRoutes);
+
+  // WebSocket setup for voice
+  const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({
+    app: honoApp,
+  });
+
+  honoApp.get(
+    "/api/voice/ws",
+    upgradeWebSocket((_c) => ({
+      onOpen: (_evt, ws) => {
+        console.log("[Voice WS] Connection opened");
+        // biome-ignore lint/suspicious/noExplicitAny: WebSocket types don't match perfectly
+        voiceWebSocketHandlers.open(ws.raw as any);
+      },
+      onClose: (_evt, ws) => {
+        console.log("[Voice WS] Connection closed");
+        // biome-ignore lint/suspicious/noExplicitAny: WebSocket types don't match perfectly
+        voiceWebSocketHandlers.close(ws.raw as any);
+      },
+      onMessage: async (evt, ws) => {
+        const data =
+          typeof evt.data === "string" ? evt.data : evt.data.toString();
+        // biome-ignore lint/suspicious/noExplicitAny: WebSocket types don't match perfectly
+        await voiceWebSocketHandlers.message(ws.raw as any, data);
+      },
+      onError: (evt, _ws) => {
+        console.error("[Voice WS] Error:", evt);
+      },
+    })),
+  );
 
   if (!isDevelopment) {
     const staticPath = resolve(import.meta.dirname, "static");
@@ -99,7 +134,7 @@ export const startServer = async (options: CliOptions) => {
   // biome-ignore lint/style/noProcessEnv: allow only here
   const hostname = options.hostname ?? process.env.HOSTNAME ?? "localhost";
 
-  serve(
+  const server = serve(
     {
       fetch: honoApp.fetch,
       port: parseInt(port, 10),
@@ -109,6 +144,9 @@ export const startServer = async (options: CliOptions) => {
       console.log(`Server is running on http://${hostname}:${info.port}`);
     },
   );
+
+  // Inject WebSocket handler into the server
+  injectWebSocket(server);
 };
 
 const PlatformLayer = Layer.mergeAll(platformLayer, NodeContext.layer);

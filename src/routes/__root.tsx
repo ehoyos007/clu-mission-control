@@ -6,6 +6,7 @@ import { AuthProvider } from "../components/AuthProvider";
 import { CluSessionsProvider } from "../components/CluSessionsProvider";
 import { ThemeProvider } from "../components/ThemeProvider";
 import { Toaster } from "../components/ui/sonner";
+import { VoiceFab } from "../components/VoiceMode";
 import { LinguiClientProvider } from "../lib/i18n/LinguiProvider";
 
 export const Route = createRootRoute({
@@ -18,6 +19,7 @@ export const Route = createRootRoute({
               <CluSessionsProvider>
                 <BrowserPreviewProvider>
                   <Outlet />
+                  <VoiceFab />
                 </BrowserPreviewProvider>
               </CluSessionsProvider>
             </AuthenticatedProviders>

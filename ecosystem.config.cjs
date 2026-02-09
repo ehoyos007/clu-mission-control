@@ -5,10 +5,11 @@ module.exports = {
       script: "dist/main.js",
       cwd: "/Users/mindmuscleu/Developer/clu-mission-control",
       interpreter: "node",
+      // Load environment variables from .env.local
+      env_file: ".env.local",
       env: {
         NODE_ENV: "production",
         PORT: 3400,
-        // Add HOSTNAME to allow remote access via Tailscale
         HOSTNAME: "0.0.0.0",
       },
       // Auto-restart on crash

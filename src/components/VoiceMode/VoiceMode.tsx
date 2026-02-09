@@ -2,16 +2,7 @@
  * Voice Mode component - Full voice chat interface
  */
 
-import {
-  BotIcon,
-  Loader2,
-  Mic,
-  Phone,
-  Square,
-  Volume2,
-  VolumeX,
-  X,
-} from "lucide-react";
+import { Loader2, Mic, Phone, Volume2, VolumeX, X } from "lucide-react";
 import { type FC, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -24,37 +15,6 @@ interface VoiceModeProps {
   onClose: () => void;
   projectId?: string; // Reserved for future use with project-specific voice sessions
 }
-
-// Generate a stable key for audio level bars
-const AUDIO_BAR_KEYS = ["bar-0", "bar-1", "bar-2", "bar-3", "bar-4"];
-
-// Visual audio level indicator
-const AudioLevelMeter: FC<{ level: number; isActive: boolean }> = ({
-  level,
-  isActive,
-}) => {
-  const bars = 5;
-  return (
-    <div className="flex items-end gap-1 h-8">
-      {AUDIO_BAR_KEYS.map((key, i) => {
-        const threshold = (i + 1) / bars;
-        const isLit = isActive && level >= threshold * 0.8;
-        return (
-          <div
-            key={key}
-            className={cn(
-              "w-1.5 rounded-full transition-all duration-75",
-              isLit ? "bg-primary" : "bg-gray-300 dark:bg-gray-600",
-            )}
-            style={{
-              height: `${20 + i * 15}%`,
-            }}
-          />
-        );
-      })}
-    </div>
-  );
-};
 
 // Status indicator with animation
 const StatusIndicator: FC<{ state: VoiceState }> = ({ state }) => {
@@ -139,9 +99,7 @@ export const VoiceMode: FC<VoiceModeProps> = ({
   onClose,
   projectId: _projectId,
 }) => {
-  const [audioLevel, setAudioLevel] = useState(0);
   const [isMuted, setIsMuted] = useState(false);
-  const animationFrameRef = useRef<number>();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Hooks
@@ -166,53 +124,68 @@ export const VoiceMode: FC<VoiceModeProps> = ({
     }
   }, [isOpen, voiceWs.state, voiceWs.connect]);
 
-  // Handle audio playback when received
+  // Handle audio playback when received, then auto-listen
   useEffect(() => {
     voiceWs.onAudioReceived((audioData) => {
       if (!isMuted) {
-        player.play(audioData).catch(console.error);
+        player
+          .play(audioData)
+          .then(() => {
+            // Auto-start listening after Clu finishes speaking
+            if (voiceWs.state === "idle" && !isRecordingRef.current) {
+              // Small delay before auto-listening
+              setTimeout(() => {
+                if (voiceWs.state === "idle" && !isRecordingRef.current) {
+                  void recorder
+                    .startRecording()
+                    .then(() => {
+                      isRecordingRef.current = true;
+                      setIsRecordingLocal(true);
+                    })
+                    .catch(console.error);
+                }
+              }, 500);
+            }
+          })
+          .catch(console.error);
       }
     });
-  }, [voiceWs, player, isMuted]);
+  }, [voiceWs, player, isMuted, recorder]);
 
-  // Update audio level visualization
-  useEffect(() => {
-    if (!recorder.isRecording) {
-      setAudioLevel(0);
-      return;
-    }
+  // Track recording state with a ref to avoid stale closure issues
+  const [isRecordingLocal, setIsRecordingLocal] = useState(false);
+  const isRecordingRef = useRef(false);
 
-    const updateLevel = () => {
-      setAudioLevel(recorder.getAudioLevel());
-      animationFrameRef.current = requestAnimationFrame(updateLevel);
-    };
+  // Tap-to-toggle recording
+  const handleMicTap = useCallback(async () => {
+    if (isRecordingRef.current) {
+      // Currently recording - stop and send
+      isRecordingRef.current = false;
+      setIsRecordingLocal(false);
+      void recorder.stopRecording();
+      voiceWs.stopRecording();
+    } else if (voiceWs.state === "idle") {
+      // Start recording
+      player.stop();
+      voiceWs.interrupt();
 
-    animationFrameRef.current = requestAnimationFrame(updateLevel);
-
-    return () => {
-      if (animationFrameRef.current) {
-        cancelAnimationFrame(animationFrameRef.current);
+      try {
+        await recorder.startRecording();
+        isRecordingRef.current = true;
+        setIsRecordingLocal(true);
+      } catch (err) {
+        console.error("[Voice] Recording failed:", err);
+        isRecordingRef.current = false;
+        setIsRecordingLocal(false);
       }
-    };
-  }, [recorder.isRecording, recorder.getAudioLevel]);
-
-  // Push-to-talk handlers
-  const handlePushToTalkStart = useCallback(async () => {
-    if (voiceWs.state !== "idle") return;
-
-    // Stop any playing audio
-    player.stop();
-    voiceWs.interrupt();
-
-    await recorder.startRecording();
-  }, [voiceWs.state, player, voiceWs.interrupt, recorder]);
-
-  const handlePushToTalkEnd = useCallback(async () => {
-    if (!recorder.isRecording) return;
-
-    await recorder.stopRecording();
-    voiceWs.stopRecording();
-  }, [recorder, voiceWs]);
+    }
+  }, [
+    voiceWs.state,
+    voiceWs.interrupt,
+    voiceWs.stopRecording,
+    recorder,
+    player,
+  ]);
 
   // Close handler
   const handleClose = useCallback(() => {
@@ -226,7 +199,7 @@ export const VoiceMode: FC<VoiceModeProps> = ({
 
   const isConnected =
     voiceWs.state !== "disconnected" && voiceWs.state !== "connecting";
-  const canRecord = voiceWs.state === "idle";
+  const _canRecord = voiceWs.state === "idle";
 
   return (
     <div className="fixed inset-0 z-50 bg-background flex flex-col">
@@ -274,8 +247,8 @@ export const VoiceMode: FC<VoiceModeProps> = ({
         {voiceWs.messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center text-muted-foreground">
             <Mic className="w-12 h-12 mb-4 opacity-50" />
-            <p className="text-lg font-medium">Hold the button to speak</p>
-            <p className="text-sm">I'll respond with voice and text</p>
+            <p className="text-lg font-medium">Tap to start talking</p>
+            <p className="text-sm">I'll listen and respond</p>
           </div>
         ) : (
           <>
@@ -289,87 +262,68 @@ export const VoiceMode: FC<VoiceModeProps> = ({
             <div ref={messagesEndRef} />
           </>
         )}
-
-        {/* Thinking indicator */}
-        {voiceWs.state === "thinking" && (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            <span className="text-sm">Clu is thinking...</span>
-          </div>
-        )}
-
-        {/* Transcription preview */}
-        {voiceWs.state === "transcribing" && voiceWs.lastTranscription && (
-          <div className="text-sm text-muted-foreground italic">
-            "{voiceWs.lastTranscription}"
-          </div>
-        )}
       </div>
 
       {/* Controls */}
-      <div className="p-6 border-t bg-muted/30">
+      <div className="p-8 border-t bg-muted/30">
         <div className="flex flex-col items-center gap-4">
-          {/* Audio level meter */}
-          <AudioLevelMeter level={audioLevel} isActive={recorder.isRecording} />
-
-          {/* Push-to-talk button */}
+          {/* Tap-to-toggle mic button */}
           <button
             type="button"
-            onMouseDown={handlePushToTalkStart}
-            onMouseUp={handlePushToTalkEnd}
-            onMouseLeave={handlePushToTalkEnd}
-            onTouchStart={handlePushToTalkStart}
-            onTouchEnd={handlePushToTalkEnd}
-            disabled={!canRecord}
+            onClick={handleMicTap}
+            disabled={
+              voiceWs.state === "thinking" || voiceWs.state === "transcribing"
+            }
             className={cn(
-              "w-20 h-20 rounded-full flex items-center justify-center transition-all",
-              "focus:outline-none focus:ring-4 focus:ring-primary/30",
-              "disabled:opacity-50 disabled:cursor-not-allowed",
-              recorder.isRecording
-                ? "bg-red-500 text-white scale-110 shadow-lg shadow-red-500/30"
-                : canRecord
-                  ? "bg-primary text-primary-foreground hover:bg-primary/90 hover:scale-105"
-                  : "bg-gray-300 dark:bg-gray-700 text-gray-500",
+              "w-32 h-32 rounded-full flex items-center justify-center transition-all duration-300",
+              "focus:outline-none",
+              "select-none z-50 relative",
+              "active:scale-95",
+              "shadow-xl",
+              isRecordingLocal || recorder.isRecording
+                ? "bg-red-500 text-white scale-105 shadow-red-500/40 animate-pulse"
+                : voiceWs.state === "speaking"
+                  ? "bg-primary/80 text-primary-foreground"
+                  : voiceWs.state === "thinking" ||
+                      voiceWs.state === "transcribing"
+                    ? "bg-gray-400 dark:bg-gray-600 text-white"
+                    : "bg-primary text-primary-foreground hover:bg-primary/90",
             )}
           >
-            {recorder.isRecording ? (
-              <Square className="w-8 h-8" />
+            {isRecordingLocal || recorder.isRecording ? (
+              <div className="flex flex-col items-center">
+                <Mic className="w-10 h-10 mb-1" />
+                <span className="text-xs font-medium">Listening...</span>
+              </div>
             ) : voiceWs.state === "speaking" ? (
-              <Volume2 className="w-8 h-8 animate-pulse" />
+              <div className="flex flex-col items-center">
+                <Volume2 className="w-10 h-10 mb-1 animate-pulse" />
+                <span className="text-xs font-medium">Speaking</span>
+              </div>
             ) : voiceWs.state === "thinking" ||
               voiceWs.state === "transcribing" ? (
-              <Loader2 className="w-8 h-8 animate-spin" />
+              <div className="flex flex-col items-center">
+                <Loader2 className="w-10 h-10 mb-1 animate-spin" />
+                <span className="text-xs font-medium">Thinking...</span>
+              </div>
             ) : (
-              <Mic className="w-8 h-8" />
+              <div className="flex flex-col items-center">
+                <Mic className="w-10 h-10 mb-1" />
+                <span className="text-xs font-medium">Tap to talk</span>
+              </div>
             )}
           </button>
 
-          {/* Instructions */}
-          <p className="text-sm text-muted-foreground">
-            {recorder.isRecording
-              ? "Release to send"
-              : canRecord
-                ? "Hold to speak"
-                : voiceWs.state === "speaking"
-                  ? "Tap to interrupt"
-                  : "Please wait..."}
-          </p>
-
-          {/* Connection status */}
+          {/* Connection status - only show if disconnected */}
           {!isConnected && (
             <Button
               variant="outline"
               onClick={() => voiceWs.connect()}
-              className="gap-2"
+              className="gap-2 mt-4"
             >
               <Phone className="w-4 h-4" />
-              Connect
+              {voiceWs.state === "connecting" ? "Connecting..." : "Connect"}
             </Button>
-          )}
-
-          {/* Error display */}
-          {voiceWs.error && (
-            <p className="text-sm text-red-500">{voiceWs.error}</p>
           )}
         </div>
       </div>

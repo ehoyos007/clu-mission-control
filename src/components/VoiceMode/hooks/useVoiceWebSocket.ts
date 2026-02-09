@@ -14,6 +14,8 @@ export type VoiceState =
   | "speaking"
   | "error";
 
+export type VoiceMode = "clu" | "direct";
+
 export interface VoiceMessage {
   role: "user" | "assistant";
   content: string;
@@ -28,6 +30,7 @@ interface ServerMessage {
   data?: string;
   final?: boolean;
   error?: string;
+  mode?: VoiceMode;
 }
 
 export interface UseVoiceWebSocketReturn {
@@ -37,12 +40,14 @@ export interface UseVoiceWebSocketReturn {
   lastTranscription: string | null;
   lastResponse: string | null;
   error: string | null;
+  mode: VoiceMode;
   connect: () => void;
   disconnect: () => void;
   sendAudioChunk: (data: ArrayBuffer) => void;
   stopRecording: () => void;
   cancel: () => void;
   interrupt: () => void;
+  setMode: (mode: VoiceMode) => void;
   onAudioReceived: (callback: (audioData: string) => void) => void;
 }
 
@@ -55,6 +60,7 @@ export function useVoiceWebSocket(): UseVoiceWebSocketReturn {
   );
   const [lastResponse, setLastResponse] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [mode, setModeState] = useState<VoiceMode>("clu");
 
   const wsRef = useRef<WebSocket | null>(null);
   const audioCallbackRef = useRef<((audioData: string) => void) | null>(null);
@@ -70,12 +76,27 @@ export function useVoiceWebSocket(): UseVoiceWebSocketReturn {
       case "session_started":
         setSessionId(message.sessionId || null);
         setState("idle");
-        console.log("[VoiceWS] Session started:", message.sessionId);
+        if (message.mode) {
+          setModeState(message.mode);
+        }
+        console.log(
+          "[VoiceWS] Session started:",
+          message.sessionId,
+          "mode:",
+          message.mode,
+        );
         break;
 
       case "state_change":
         if (message.state) {
           setState(message.state as VoiceState);
+        }
+        break;
+
+      case "mode_changed":
+        if (message.mode) {
+          setModeState(message.mode);
+          console.log("[VoiceWS] Mode changed to:", message.mode);
         }
         break;
 
@@ -234,6 +255,25 @@ export function useVoiceWebSocket(): UseVoiceWebSocketReturn {
     );
   }, [sessionId]);
 
+  const setMode = useCallback(
+    (newMode: VoiceMode) => {
+      if (wsRef.current?.readyState !== WebSocket.OPEN || !sessionId) {
+        // If not connected yet, just set local state
+        setModeState(newMode);
+        return;
+      }
+
+      wsRef.current.send(
+        JSON.stringify({
+          type: "set_mode",
+          sessionId,
+          mode: newMode,
+        }),
+      );
+    },
+    [sessionId],
+  );
+
   const onAudioReceived = useCallback(
     (callback: (audioData: string) => void) => {
       audioCallbackRef.current = callback;
@@ -268,12 +308,14 @@ export function useVoiceWebSocket(): UseVoiceWebSocketReturn {
     lastTranscription,
     lastResponse,
     error,
+    mode,
     connect,
     disconnect,
     sendAudioChunk,
     stopRecording,
     cancel,
     interrupt,
+    setMode,
     onAudioReceived,
   };
 }

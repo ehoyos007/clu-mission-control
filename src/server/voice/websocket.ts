@@ -3,7 +3,7 @@
  */
 
 import type { ServerWebSocket } from "bun";
-import { generateVoiceResponse } from "./llm";
+import { generateVoiceResponse, type VoiceMode } from "./llm";
 import {
   addMessage,
   createVoiceSession,
@@ -22,10 +22,12 @@ interface ClientMessage {
     | "stop_recording"
     | "cancel"
     | "interrupt"
-    | "ping";
+    | "ping"
+    | "set_mode";
   sessionId?: string;
   projectId?: string;
   data?: string; // base64 audio data
+  mode?: VoiceMode; // "clu" or "direct"
 }
 
 // Message types to client
@@ -37,13 +39,15 @@ interface ServerMessage {
     | "response_text"
     | "audio_data"
     | "error"
-    | "pong";
+    | "pong"
+    | "mode_changed";
   sessionId?: string;
   state?: string;
   text?: string;
   data?: string; // base64 audio
   final?: boolean;
   error?: string;
+  mode?: VoiceMode;
 }
 
 // Active connections mapped to session IDs
@@ -52,6 +56,9 @@ const sessionConnections = new Map<string, Set<ServerWebSocket<unknown>>>();
 
 // Audio buffer for accumulating chunks during recording
 const audioBuffers = new Map<string, Buffer[]>();
+
+// Voice mode per session (default: "clu")
+const sessionModes = new Map<string, VoiceMode>();
 
 /**
  * Send a message to a WebSocket client
@@ -137,6 +144,10 @@ export async function handleMessage(
         await handleInterrupt(ws, data.sessionId);
         break;
 
+      case "set_mode":
+        handleSetMode(ws, data.sessionId, data.mode);
+        break;
+
       default:
         send(ws, {
           type: "error",
@@ -156,6 +167,7 @@ export async function handleMessage(
 async function handleStartSession(
   ws: ServerWebSocket<unknown>,
   projectId?: string,
+  initialMode?: VoiceMode,
 ): Promise<void> {
   const session = createVoiceSession(projectId);
 
@@ -170,10 +182,43 @@ async function handleStartSession(
   // Initialize audio buffer
   audioBuffers.set(session.id, []);
 
+  // Initialize voice mode (default: "clu")
+  const mode = initialMode || "clu";
+  sessionModes.set(session.id, mode);
+
   send(ws, {
     type: "session_started",
     sessionId: session.id,
     state: session.state,
+    mode,
+  });
+}
+
+/**
+ * Handle mode change
+ */
+function handleSetMode(
+  ws: ServerWebSocket<unknown>,
+  sessionId?: string,
+  mode?: VoiceMode,
+): void {
+  if (!sessionId || !mode) {
+    send(ws, { type: "error", error: "Missing sessionId or mode" });
+    return;
+  }
+
+  if (mode !== "clu" && mode !== "direct") {
+    send(ws, { type: "error", error: "Invalid mode. Use 'clu' or 'direct'" });
+    return;
+  }
+
+  sessionModes.set(sessionId, mode);
+  console.log(`[Voice WS] Session ${sessionId} mode changed to: ${mode}`);
+
+  broadcast(sessionId, {
+    type: "mode_changed",
+    sessionId,
+    mode,
   });
 }
 
@@ -280,7 +325,15 @@ async function handleStopRecording(
     // Remove the last message (the one we just added) from history for the API call
     const previousHistory = history.slice(0, -1);
 
-    const responseText = await generateVoiceResponse(userText, previousHistory);
+    // Get the voice mode for this session
+    const mode = sessionModes.get(sessionId) || "clu";
+    console.log(`[Voice WS] Generating response in ${mode} mode`);
+
+    const responseText = await generateVoiceResponse(
+      userText,
+      previousHistory,
+      { mode },
+    );
 
     // Send text response to client
     broadcast(sessionId, {

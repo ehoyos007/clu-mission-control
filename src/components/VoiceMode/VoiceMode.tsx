@@ -2,19 +2,74 @@
  * Voice Mode component - Full voice chat interface
  */
 
-import { Loader2, Mic, Phone, Volume2, VolumeX, X } from "lucide-react";
+import {
+  Bot,
+  Loader2,
+  Mic,
+  Phone,
+  Volume2,
+  VolumeX,
+  X,
+  Zap,
+} from "lucide-react";
 import { type FC, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useAudioPlayer } from "./hooks/useAudioPlayer";
 import { useAudioRecorder } from "./hooks/useAudioRecorder";
-import { useVoiceWebSocket, type VoiceState } from "./hooks/useVoiceWebSocket";
+import {
+  useVoiceWebSocket,
+  type VoiceMode as VoiceModeType,
+  type VoiceState,
+} from "./hooks/useVoiceWebSocket";
 
 interface VoiceModeProps {
   isOpen: boolean;
   onClose: () => void;
   projectId?: string; // Reserved for future use with project-specific voice sessions
 }
+
+// Mode toggle component
+const ModeToggle: FC<{
+  mode: VoiceModeType;
+  onModeChange: (mode: VoiceModeType) => void;
+  disabled?: boolean;
+}> = ({ mode, onModeChange, disabled }) => {
+  return (
+    <div className="flex items-center gap-1 bg-muted rounded-full p-1">
+      <button
+        type="button"
+        onClick={() => onModeChange("clu")}
+        disabled={disabled}
+        className={cn(
+          "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all",
+          mode === "clu"
+            ? "bg-primary text-primary-foreground"
+            : "text-muted-foreground hover:text-foreground",
+          disabled && "opacity-50 cursor-not-allowed",
+        )}
+      >
+        <Bot className="w-3 h-3" />
+        Clu
+      </button>
+      <button
+        type="button"
+        onClick={() => onModeChange("direct")}
+        disabled={disabled}
+        className={cn(
+          "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all",
+          mode === "direct"
+            ? "bg-blue-500 text-white"
+            : "text-muted-foreground hover:text-foreground",
+          disabled && "opacity-50 cursor-not-allowed",
+        )}
+      >
+        <Zap className="w-3 h-3" />
+        Direct
+      </button>
+    </div>
+  );
+};
 
 // Status indicator with animation
 const StatusIndicator: FC<{ state: VoiceState }> = ({ state }) => {
@@ -206,16 +261,38 @@ export const VoiceMode: FC<VoiceModeProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b">
         <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-            <BotIcon className="w-5 h-5 text-primary" />
+          <div
+            className={cn(
+              "w-10 h-10 rounded-full flex items-center justify-center",
+              voiceWs.mode === "clu" ? "bg-primary/10" : "bg-blue-500/10",
+            )}
+          >
+            {voiceWs.mode === "clu" ? (
+              <Bot className="w-5 h-5 text-primary" />
+            ) : (
+              <Zap className="w-5 h-5 text-blue-500" />
+            )}
           </div>
           <div>
-            <h2 className="font-semibold">Voice Chat with Clu</h2>
+            <h2 className="font-semibold">
+              {voiceWs.mode === "clu" ? "Voice Chat with Clu" : "Direct Claude"}
+            </h2>
             <StatusIndicator state={voiceWs.state} />
           </div>
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Mode toggle */}
+          <ModeToggle
+            mode={voiceWs.mode}
+            onModeChange={voiceWs.setMode}
+            disabled={
+              voiceWs.state === "thinking" ||
+              voiceWs.state === "transcribing" ||
+              voiceWs.state === "speaking"
+            }
+          />
+
           {/* Mute button */}
           <Button
             variant="ghost"

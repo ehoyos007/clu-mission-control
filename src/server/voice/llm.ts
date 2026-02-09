@@ -1,9 +1,14 @@
 /**
  * LLM integration for voice conversations
- * Uses Claude via Anthropic API
+ * Supports two modes:
+ * - "clu": Routes through OpenClaw gateway (Clu with full tools/memory)
+ * - "direct": Direct Anthropic API call (quick, isolated questions)
  */
 
 import Anthropic from "@anthropic-ai/sdk";
+import { sendToOpenClaw } from "./openclaw";
+
+export type VoiceMode = "clu" | "direct";
 
 let anthropicClient: Anthropic | null = null;
 
@@ -43,16 +48,44 @@ export interface VoiceResponseOptions {
   maxTokens?: number;
   temperature?: number;
   model?: string;
+  mode?: VoiceMode;
 }
 
 /**
  * Generate a voice-optimized response from Claude
+ * Supports two modes:
+ * - "clu" (default): Routes through OpenClaw gateway for full Clu capabilities
+ * - "direct": Direct Anthropic API for quick, isolated questions
  */
 export async function generateVoiceResponse(
   userMessage: string,
   conversationHistory: ConversationMessage[] = [],
   options?: VoiceResponseOptions,
 ): Promise<string> {
+  const mode = options?.mode || "clu";
+  const startTime = Date.now();
+
+  // Clu mode: Route through OpenClaw gateway
+  if (mode === "clu") {
+    try {
+      console.log("[LLM] Using Clu mode (OpenClaw gateway)");
+      const response = await sendToOpenClaw(userMessage, conversationHistory);
+      const duration = Date.now() - startTime;
+      console.log(
+        `[LLM] Clu response in ${duration}ms: "${response.slice(0, 50)}..."`,
+      );
+      return response;
+    } catch (error) {
+      console.error(
+        "[LLM] OpenClaw error, falling back to direct mode:",
+        error,
+      );
+      // Fall through to direct mode on error
+    }
+  }
+
+  // Direct mode: Use Anthropic API directly
+  console.log("[LLM] Using direct mode (Anthropic API)");
   const anthropic = getAnthropic();
 
   const model = options?.model || "claude-sonnet-4-20250514";
@@ -71,8 +104,6 @@ export async function generateVoiceResponse(
     },
   ];
 
-  const startTime = Date.now();
-
   const response = await anthropic.messages.create({
     model,
     max_tokens: maxTokens,
@@ -89,7 +120,7 @@ export async function generateVoiceResponse(
     textContent?.text || "I'm sorry, I couldn't generate a response.";
 
   console.log(
-    `[LLM] Generated response in ${duration}ms: "${responseText.slice(0, 50)}..."`,
+    `[LLM] Direct response in ${duration}ms: "${responseText.slice(0, 50)}..."`,
   );
 
   return responseText;
@@ -139,9 +170,19 @@ export async function* generateVoiceResponseStream(
 }
 
 /**
- * Check if LLM is available
+ * Check if LLM is available for a given mode
  */
-export function isLLMAvailable(): boolean {
+export function isLLMAvailable(mode: VoiceMode = "clu"): boolean {
+  if (mode === "clu") {
+    // OpenClaw gateway should be available on localhost
+    // We'll do a quick check on first use
+    return true;
+  }
   // biome-ignore lint/style/noProcessEnv: Voice module uses env vars directly
   return !!process.env.ANTHROPIC_API_KEY;
 }
+
+/**
+ * Check if OpenClaw gateway is reachable
+ */
+export { isOpenClawAvailable } from "./openclaw";

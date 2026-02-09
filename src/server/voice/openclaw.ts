@@ -1,214 +1,121 @@
 /**
  * OpenClaw Gateway client for voice conversations
- * Routes voice messages through the OpenClaw gateway to access Clu's full capabilities
+ * Uses the OpenAI-compatible HTTP API for simplicity
  */
 
-import WebSocket from "ws";
+const getEnv = (key: string, fallback: string): string => {
+  // biome-ignore lint/style/noProcessEnv: Voice module uses env vars directly
+  return process.env[key] || fallback;
+};
 
-// biome-ignore lint/style/noProcessEnv: Voice module uses env vars directly
-const GATEWAY_URL = process.env.OPENCLAW_GATEWAY_URL || "ws://127.0.0.1:18789";
+const GATEWAY_URL = getEnv("OPENCLAW_GATEWAY_URL", "http://127.0.0.1:18789");
+const GATEWAY_TOKEN = getEnv("OPENCLAW_GATEWAY_TOKEN", "");
 
-interface GatewayFrame {
-  type: "req" | "res" | "event";
-  id?: string;
-  method?: string;
-  params?: Record<string, unknown>;
-  ok?: boolean;
-  payload?: Record<string, unknown>;
-  event?: string;
-  error?: { code: string; message: string };
+interface ChatMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
 }
 
-interface ChatResponse {
-  text: string;
-  complete: boolean;
+interface ChatCompletionResponse {
+  id: string;
+  object: string;
+  created: number;
+  model: string;
+  choices: {
+    index: number;
+    message: {
+      role: string;
+      content: string;
+    };
+    finish_reason: string;
+  }[];
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+  };
 }
 
-let connectionPromise: Promise<WebSocket> | null = null;
-let activeConnection: WebSocket | null = null;
-let requestId = 0;
+// Voice-optimized system prompt for Clu
+const VOICE_SYSTEM_PROMPT = `You are Clu, responding via voice chat. Keep responses concise (1-3 sentences typically).
+
+Guidelines:
+- Use natural, conversational language
+- Avoid bullet points, lists, or formatting that doesn't work well spoken
+- Don't use markdown, code blocks, or special characters
+- If asked to do something complex, acknowledge briefly and confirm you'll do it
+- Be warm and personable
+- For technical topics, explain simply without jargon
+
+Remember: Your response will be spoken aloud, so write how you would naturally speak.
+
+You have access to all your normal tools and capabilities. If the user asks you to do something that requires tools (search, file operations, spawning Claude Code sessions, etc.), you can do it and briefly confirm what you did.`;
 
 /**
- * Get or create a connection to the OpenClaw gateway
- */
-async function getConnection(): Promise<WebSocket> {
-  if (activeConnection?.readyState === WebSocket.OPEN) {
-    return activeConnection;
-  }
-
-  if (connectionPromise) {
-    return connectionPromise;
-  }
-
-  connectionPromise = new Promise((resolve, reject) => {
-    console.log(`[OpenClaw] Connecting to gateway at ${GATEWAY_URL}`);
-    const ws = new WebSocket(GATEWAY_URL);
-
-    const timeout = setTimeout(() => {
-      ws.close();
-      reject(new Error("Gateway connection timeout"));
-    }, 10000);
-
-    ws.on("open", () => {
-      console.log("[OpenClaw] WebSocket connected, sending handshake");
-
-      // Send connect handshake
-      const connectFrame: GatewayFrame = {
-        type: "req",
-        id: `c${++requestId}`,
-        method: "connect",
-        params: {
-          minProtocol: 3,
-          maxProtocol: 3,
-          client: {
-            id: "clu-mission-control-voice",
-            displayName: "Clu Mission Control Voice",
-            version: "1.0.0",
-            platform: "node",
-            mode: "api",
-          },
-        },
-      };
-
-      ws.send(JSON.stringify(connectFrame));
-    });
-
-    ws.on("message", (data) => {
-      try {
-        const frame: GatewayFrame = JSON.parse(data.toString());
-
-        // Handle connect response
-        if (
-          frame.type === "res" &&
-          frame.ok &&
-          frame.payload?.type === "hello-ok"
-        ) {
-          console.log("[OpenClaw] Gateway handshake complete");
-          clearTimeout(timeout);
-          activeConnection = ws;
-          connectionPromise = null;
-          resolve(ws);
-        } else if (frame.type === "res" && !frame.ok) {
-          console.error("[OpenClaw] Gateway rejected connection:", frame.error);
-          clearTimeout(timeout);
-          connectionPromise = null;
-          reject(
-            new Error(frame.error?.message || "Gateway rejected connection"),
-          );
-        }
-      } catch (err) {
-        console.error("[OpenClaw] Error parsing gateway message:", err);
-      }
-    });
-
-    ws.on("error", (err) => {
-      console.error("[OpenClaw] WebSocket error:", err);
-      clearTimeout(timeout);
-      connectionPromise = null;
-      reject(err);
-    });
-
-    ws.on("close", () => {
-      console.log("[OpenClaw] WebSocket closed");
-      activeConnection = null;
-      connectionPromise = null;
-    });
-  });
-
-  return connectionPromise;
-}
-
-/**
- * Send a voice message through the OpenClaw gateway and get a response
+ * Send a voice message through the OpenClaw gateway HTTP API
  * This routes through Clu, giving access to all tools and memory
  */
 export async function sendToOpenClaw(
   userMessage: string,
-  _conversationHistory: { role: "user" | "assistant"; content: string }[] = [],
+  conversationHistory: { role: "user" | "assistant"; content: string }[] = [],
 ): Promise<string> {
-  const ws = await getConnection();
-  const reqId = `chat${++requestId}`;
+  const url = `${GATEWAY_URL.replace("ws://", "http://").replace("wss://", "https://")}/v1/chat/completions`;
 
-  return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
-      reject(new Error("OpenClaw response timeout"));
-    }, 120000); // 2 minute timeout for complex operations
+  // Build messages array
+  const messages: ChatMessage[] = [
+    { role: "system", content: VOICE_SYSTEM_PROMPT },
+    ...conversationHistory.map((m) => ({
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    })),
+    { role: "user", content: userMessage },
+  ];
 
-    let responseText = "";
-    let _isComplete = false;
+  console.log(`[OpenClaw] Sending to ${url}: "${userMessage.slice(0, 50)}..."`);
 
-    const messageHandler = (data: WebSocket.Data) => {
-      try {
-        const frame: GatewayFrame = JSON.parse(data.toString());
+  const startTime = Date.now();
 
-        // Handle chat.send response (ack)
-        if (frame.type === "res" && frame.id === reqId) {
-          if (!frame.ok) {
-            clearTimeout(timeout);
-            ws.off("message", messageHandler);
-            reject(new Error(frame.error?.message || "Chat request failed"));
-            return;
-          }
-          // Ack received, wait for chat events
-          console.log(
-            "[OpenClaw] Chat request acknowledged, waiting for response...",
-          );
-        }
-
-        // Handle chat events (streaming response)
-        if (frame.type === "event" && frame.event === "chat") {
-          const payload = frame.payload as {
-            kind?: string;
-            text?: string;
-            delta?: string;
-            final?: boolean;
-            complete?: boolean;
-          };
-
-          // Accumulate text from delta or text field
-          if (payload.delta) {
-            responseText += payload.delta;
-          } else if (payload.text && payload.kind === "assistant") {
-            responseText = payload.text;
-          }
-
-          // Check if response is complete
-          if (payload.final || payload.complete) {
-            _isComplete = true;
-            clearTimeout(timeout);
-            ws.off("message", messageHandler);
-
-            // Clean up response for voice (remove markdown, etc.)
-            const cleanedResponse = cleanResponseForVoice(responseText);
-            console.log(
-              `[OpenClaw] Response complete: "${cleanedResponse.slice(0, 50)}..."`,
-            );
-            resolve(cleanedResponse);
-          }
-        }
-      } catch (err) {
-        console.error("[OpenClaw] Error parsing message:", err);
-      }
-    };
-
-    ws.on("message", messageHandler);
-
-    // Send the chat.send request
-    // Note: We're sending to the main session which routes to Clu
-    const chatFrame: GatewayFrame = {
-      type: "req",
-      id: reqId,
-      method: "chat.send",
-      params: {
-        text: userMessage,
-        sessionKey: "main",
-        idempotencyKey: `voice-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${GATEWAY_TOKEN}`,
+        "x-openclaw-agent-id": "main",
       },
-    };
+      body: JSON.stringify({
+        model: "openclaw:main",
+        messages,
+        max_tokens: 500,
+        temperature: 0.7,
+      }),
+    });
 
-    console.log(`[OpenClaw] Sending message: "${userMessage.slice(0, 50)}..."`);
-    ws.send(JSON.stringify(chatFrame));
-  });
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[OpenClaw] HTTP ${response.status}: ${errorText}`);
+      throw new Error(`OpenClaw API error: ${response.status} ${errorText}`);
+    }
+
+    const data: ChatCompletionResponse = await response.json();
+    const duration = Date.now() - startTime;
+
+    const responseText =
+      data.choices?.[0]?.message?.content ||
+      "I'm sorry, I couldn't generate a response.";
+
+    // Clean up response for voice
+    const cleanedResponse = cleanResponseForVoice(responseText);
+
+    console.log(
+      `[OpenClaw] Response in ${duration}ms: "${cleanedResponse.slice(0, 50)}..."`,
+    );
+
+    return cleanedResponse;
+  } catch (error) {
+    console.error("[OpenClaw] Request failed:", error);
+    throw error;
+  }
 }
 
 /**
@@ -243,24 +150,36 @@ function cleanResponseForVoice(text: string): string {
 }
 
 /**
- * Check if the OpenClaw gateway is available
+ * Check if the OpenClaw gateway HTTP API is available
  */
 export async function isOpenClawAvailable(): Promise<boolean> {
+  const url = `${GATEWAY_URL.replace("ws://", "http://").replace("wss://", "https://")}/v1/chat/completions`;
+
   try {
-    const ws = await getConnection();
-    return ws.readyState === WebSocket.OPEN;
+    // Just check if the endpoint responds (even with auth error means it's available)
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${GATEWAY_TOKEN}`,
+      },
+      body: JSON.stringify({
+        model: "openclaw:main",
+        messages: [{ role: "user", content: "ping" }],
+        max_tokens: 1,
+      }),
+    });
+
+    // 200 = success, 401/403 = auth issue but endpoint exists
+    return response.ok || response.status === 401 || response.status === 403;
   } catch {
     return false;
   }
 }
 
 /**
- * Disconnect from the gateway
+ * No-op for HTTP mode (was used for WebSocket cleanup)
  */
 export function disconnectFromOpenClaw(): void {
-  if (activeConnection) {
-    activeConnection.close();
-    activeConnection = null;
-  }
-  connectionPromise = null;
+  // No persistent connection to clean up with HTTP
 }

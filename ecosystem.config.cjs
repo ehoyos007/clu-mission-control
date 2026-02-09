@@ -2,11 +2,9 @@ module.exports = {
   apps: [
     {
       name: "clu-mission-control",
-      script: "dist/main.js",
+      script: "./start.sh",
       cwd: "/Users/mindmuscleu/Developer/clu-mission-control",
-      interpreter: "node",
-      // Load environment variables from .env.local
-      env_file: ".env.local",
+      interpreter: "/bin/bash",
       env: {
         NODE_ENV: "production",
         PORT: 3400,

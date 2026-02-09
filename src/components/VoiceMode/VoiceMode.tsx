@@ -182,10 +182,19 @@ export const VoiceMode: FC<VoiceModeProps> = ({
   // Handle audio playback when received, then auto-listen
   useEffect(() => {
     voiceWs.onAudioReceived((audioData) => {
+      console.log(
+        "[VoiceMode] Audio received, length:",
+        audioData.length,
+        "muted:",
+        isMuted,
+        "unlocked:",
+        player.isUnlocked,
+      );
       if (!isMuted) {
         player
           .play(audioData)
           .then(() => {
+            console.log("[VoiceMode] Audio playback completed");
             // Auto-start listening after Clu finishes speaking
             if (voiceWs.state === "idle" && !isRecordingRef.current) {
               // Small delay before auto-listening
@@ -202,7 +211,9 @@ export const VoiceMode: FC<VoiceModeProps> = ({
               }, 500);
             }
           })
-          .catch(console.error);
+          .catch((err) => {
+            console.error("[VoiceMode] Audio playback failed:", err);
+          });
       }
     });
   }, [voiceWs, player, isMuted, recorder]);
@@ -213,6 +224,11 @@ export const VoiceMode: FC<VoiceModeProps> = ({
 
   // Tap-to-toggle recording
   const handleMicTap = useCallback(async () => {
+    // Always try to unlock audio on user interaction (Safari requirement)
+    if (!player.isUnlocked) {
+      await player.unlock();
+    }
+
     if (isRecordingRef.current) {
       // Currently recording - stop and send
       isRecordingRef.current = false;
